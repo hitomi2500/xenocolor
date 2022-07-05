@@ -389,10 +389,10 @@ int color_quant(image im, int n_colors, int dither)
     }
 
     //folding into zero
-    while (heap.n > 2)
+    /*while (heap.n > 2)
     {
         pop_heap(&heap);
-    }
+    }*/
 
     node_free();
     free(heap.buf);

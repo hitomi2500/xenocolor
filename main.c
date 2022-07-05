@@ -207,6 +207,17 @@ int main(int argc, char *argv[] )
         /*if (iteration==3)
             for (int i=0;i<20000;i++) im_tmp.pix[i] = 0x0;*/
 
+        //replacfe alpha with pink
+        for (int y=0;y<im.h;y++)
+            for (int x=0;x<im.w;x++)
+                if (im.pix[(y*im.w+x)*4+3] < 127)
+                {
+                    im.pix[(y*im.w+x)*4+0] = 255;
+                    im.pix[(y*im.w+x)*4+1] = 0;
+                    im.pix[(y*im.w+x)*4+2] = 255;
+                    im.pix[(y*im.w+x)*4+3] = 255;
+                }
+
         colors = color_quant(&im, current_colors_limit, dithering);
         printf("Colors number : %i ( limit %i), requested %i, diff %i \n",colors,current_colors_limit,color_limit,abs(colors - color_limit));
         if (colors > color_limit)
