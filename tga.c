@@ -83,7 +83,7 @@ TgaImage* TgaImage_new(const char* filename) {
             this = TgaImage_readRLE(pFile, header);
         }
 
-        free(header);
+        //free(header);
         fclose(pFile);
         return this;
     }

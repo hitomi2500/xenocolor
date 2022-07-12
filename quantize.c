@@ -134,19 +134,19 @@ oct_node node_insert(oct_node root, unsigned char *pix)
 		root = root->kids[i];
 	}
  
-    /*root->r += pix[0];
+    root->r += pix[0];
 	root->g += pix[1];
-    root->b += pix[2];*/
-    root->r += pix[0]/8;
+    root->b += pix[2];
+    /*root->r += pix[0]/8;
     root->g += pix[1]/8;
-    root->b += pix[2]/8;
+    root->b += pix[2]/8;*/
     /*root->r += (pix[0]+2)&0xF8;
     root->g += (pix[1]+2)&0xF8;
     root->b += (pix[2]+2)&0xF8;*/
     root->count++;
 	return root;
 }
- 
+
 oct_node node_fold(oct_node p)
 {
 	if (p->n_kids) abort();
@@ -163,7 +163,7 @@ oct_node node_fold(oct_node p)
 	q->kids[p->kid_idx] = 0;
 	return q;
 }
- 
+
 void color_replace(oct_node root, unsigned char *pix)
 {
 	unsigned char i, bit;
@@ -175,18 +175,63 @@ void color_replace(oct_node root, unsigned char *pix)
 	}
  
 
-    /* pix[0] = root->r;
+     pix[0] = root->r;
      pix[1] = root->g;
-     pix[2] = root->b;*/
+     pix[2] = root->b;
 
-     pix[0] = root->r*8;
+     /*pix[0] = root->r*8;
      pix[1] = root->g*8;
-     pix[2] = root->b*8;
+     pix[2] = root->b*8;*/
 
     /*pix[0] = (root->r+2)&0xF8;
     pix[1] = (root->g+2)&0xF8;
     pix[2] = (root->b+2)&0xF8;*/
 }
+
+void color_replace_stupid(oct_node * stupid_buf, int stupid_buf_n, unsigned char *pix)
+{
+    int diff = 100500000;
+    int currdiff = 0;
+    int ind = 0;
+
+    for (int i=0; i< stupid_buf_n; i++)
+    {
+        currdiff = (stupid_buf[i]->r - pix[0])*(stupid_buf[i]->r - pix[0]) +
+                (stupid_buf[i]->g - pix[1])*(stupid_buf[i]->g - pix[1]) +
+                (stupid_buf[i]->b - pix[2])*(stupid_buf[i]->b - pix[2]);
+        if ( currdiff < diff )
+        {
+            ind = i;
+            diff = currdiff;
+        }
+    }
+
+     pix[0] = stupid_buf[ind]->r;
+     pix[1] = stupid_buf[ind]->g;
+     pix[2] = stupid_buf[ind]->b;
+}
+
+int color_find_stupid(oct_node * stupid_buf, int stupid_buf_n, unsigned char *pix)
+{
+    int diff = 100500000;
+    int currdiff = 0;
+    int ind = 0;
+
+    for (int i=0; i< stupid_buf_n; i++)
+    {
+        currdiff = (stupid_buf[i]->r - pix[0])*(stupid_buf[i]->r - pix[0]) +
+                (stupid_buf[i]->g - pix[1])*(stupid_buf[i]->g - pix[1]) +
+                (stupid_buf[i]->b - pix[2])*(stupid_buf[i]->b - pix[2]);
+        if ( currdiff < diff )
+        {
+            ind = i;
+            diff = currdiff;
+        }
+    }
+
+    return ind;
+}
+
 
 oct_node nearest_color(int *v, node_heap *h) {
     int i;
@@ -319,35 +364,241 @@ int error_diffuse(image im, node_heap *h)
     return colors_num;
 }
  
+void debug_dump_colors_recursive(FILE * _f, oct_node node)
+{
+    char buf[256];
+    sprintf(buf,"%i %i %i\r\n",node->r, node->g, node->b);
+    fwrite(buf,strlen(buf),1,_f);
+    for (int i = 0; i< node->n_kids; i++)
+    {
+        if (node->kids[i] != NULL)
+            debug_dump_colors_recursive(_f,node->kids[i]);
+    }
+
+}
+
 int color_quant(image im, int n_colors, int dither)
 {
-	int i;
+    int i,j;
 	unsigned char *pix = im->pix;
     node_heap heap = { 0, 0, 0 };
 
     int current_colors=0;
     //int current_colors_limit=n_colors;
     int colors[8192*4];
+    char buf[256];
     int colors_num = 0;
     int color;
     int bfound;
+    int stupid_buf_n = 0;
 
     oct_node root = node_new(0, 0, 0, 1);
     oct_node got;
     for (i = 0; i < im->w * im->h; i++, pix += 3)
         heap_add(&heap, node_insert(root, pix));
 
+    printf("TEST NOTE 10 : heap.n = %i \n",heap.n);
+
+    //moving to linear array instead of this ugly shit
+    //oct_node* stupid_buf = malloc(sizeof(oct_node)*heap.n);
+    oct_node stupid_buf[3000];
+    for (i = 1; i < heap.n; i++)
+    {
+        stupid_buf[i] = heap.buf[i];
+        /*got = heap.buf[i];
+        stupid_buf[i].count = got->count;
+        stupid_buf[i].r = got->r;
+        stupid_buf[i].g = got->g;
+        stupid_buf[i].b = got->b;
+        stupid_buf[i].depth = got->depth;
+        stupid_buf[i].flags = got->flags;
+        stupid_buf[i].heap_idx = got->heap_idx;
+        stupid_buf[i].kid_idx = got->kid_idx;
+        for (int i=0;i<8;i++)
+            stupid_buf[i].kids[i] = got->kids[i];
+        stupid_buf[i].n_kids = got->n_kids;
+        stupid_buf[i].parent = got->parent;*/
+    }
+    stupid_buf[0] = heap.buf[1];//missing zero shit
+
+    stupid_buf_n = heap.n;
+
+    //killing zero-count trash (why it's there anyway?)
+    for (j = 0; j < stupid_buf_n; j++) {
+        if (stupid_buf[j]->count <= 0)
+        {
+            //removing node j
+                    for (int k=j; k< stupid_buf_n; k++)
+                        stupid_buf[k] = stupid_buf[k+1];
+                    stupid_buf_n--;
+                    j=0;
+        }
+    }
+
+    printf("TEST NOTE 20 : stupid_buf_n = %i \n",stupid_buf_n);
+
+    //glueing colors that are the same in RGB555 colorspace
+    for (i = 0; i < stupid_buf_n; i++) {
+        for (j = i+1; j < stupid_buf_n; j++) {
+            if ( (round(stupid_buf[i]->r/(stupid_buf[i]->count*8)) == round(stupid_buf[j]->r/(stupid_buf[j]->count*8))) &&
+                   (round(stupid_buf[i]->g/(stupid_buf[i]->count*8)) == round(stupid_buf[j]->g/(stupid_buf[j]->count*8))) &&
+                     (round(stupid_buf[i]->b/(stupid_buf[i]->count*8)) == round(stupid_buf[j]->b/(stupid_buf[j]->count*8))) )
+            {
+                //if (stupid_buf[i]->count > stupid_buf[j]->count)
+                {
+                    //removing node j
+                    for (int k=j+1; k< stupid_buf_n; k++)
+                        stupid_buf[k-1] = stupid_buf[k];
+                    stupid_buf_n--;
+                    i=0;
+                    j=1;
+                }
+            }
+        }
+    }
+
+    printf("TEST NOTE 30 : stupid_buf_n = %i \n",stupid_buf_n);
+
+    //normalizing and translating the remainder into RGB555 colorspace
+    for (i = 0; i < stupid_buf_n; i++) {
+        stupid_buf[i]->r = 8*round(stupid_buf[i]->r/(stupid_buf[i]->count*8));
+        stupid_buf[i]->g = 8*round(stupid_buf[i]->g/(stupid_buf[i]->count*8));
+        stupid_buf[i]->b = 8*round(stupid_buf[i]->b/(stupid_buf[i]->count*8));
+    }
+
+    //dropping colors that are not used by image anymore
+    uint8_t *usagebuf = malloc(stupid_buf_n+10);
+    memset(usagebuf,0,stupid_buf_n+10);
+    for (i = 0, pix = im->pix; i < im->w * im->h; i++, pix += 4)
+    {
+         int _tmp = color_find_stupid(stupid_buf,stupid_buf_n,pix);
+         usagebuf[_tmp] = 1;
+    }
+    for (i=0;i<stupid_buf_n;i++)
+    {
+        if (usagebuf[i] == 0)
+            stupid_buf[i]->count = 0;
+    }
+    for (j = 0; j < stupid_buf_n; j++) {
+        if (stupid_buf[j]->count <= 0)
+        {
+            //removing node j
+                    for (int k=j; k< stupid_buf_n; k++)
+                        stupid_buf[k] = stupid_buf[k+1];
+                    stupid_buf_n--;
+                    j=0;
+        }
+    }
+    free (usagebuf);
+
+    printf("TEST NOTE 40 : stupid_buf_n = %i \n",stupid_buf_n);
+
+    //decreasing color count until requested
+    while (stupid_buf_n > n_colors + 1)
+    {        
+        //searching the lowest diff
+        int diff = 100500000;
+        int ind1 = -1;
+        int ind2 = -1;
+        int currdiff = 0;
+        for (i = 1; i < stupid_buf_n; i++) {
+            for (j = i+1; j < stupid_buf_n; j++) {
+                currdiff = (stupid_buf[i]->r - stupid_buf[j]->r)*(stupid_buf[i]->r - stupid_buf[j]->r) +
+                        (stupid_buf[i]->g - stupid_buf[j]->g)*(stupid_buf[i]->g - stupid_buf[j]->g) +
+                        (stupid_buf[i]->b - stupid_buf[j]->b)*(stupid_buf[i]->b - stupid_buf[j]->b);
+                if ( currdiff < diff )
+                {
+                    ind1 = i;
+                    ind2 = j;
+                    diff = currdiff;
+                }
+            }
+        }
+
+        if (ind1 < 0) abort();
+
+        //merging colors into ind1
+        stupid_buf[ind1]->r = (stupid_buf[ind1]->r*stupid_buf[ind1]->count + stupid_buf[ind2]->r*stupid_buf[ind2]->count) / (stupid_buf[ind1]->count + stupid_buf[ind2]->count);
+        stupid_buf[ind1]->g = (stupid_buf[ind1]->g*stupid_buf[ind1]->count + stupid_buf[ind2]->g*stupid_buf[ind2]->count) / (stupid_buf[ind1]->count + stupid_buf[ind2]->count);
+        stupid_buf[ind1]->b = (stupid_buf[ind1]->b*stupid_buf[ind1]->count + stupid_buf[ind2]->b*stupid_buf[ind2]->count) / (stupid_buf[ind1]->count + stupid_buf[ind2]->count);
+
+        //translating the ind1 into RGB555 colorspace again
+        for (i = 0; i < stupid_buf_n; i++) {
+            stupid_buf[ind1]->r = 8*round(stupid_buf[ind1]->r/8);
+            stupid_buf[ind1]->g = 8*round(stupid_buf[ind1]->g/8);
+            stupid_buf[ind1]->b = 8*round(stupid_buf[ind1]->b/8);
+        }
+
+        //removing ind2
+        for (int k=ind2+1; k< stupid_buf_n; k++)
+            stupid_buf[k-1] = stupid_buf[k];
+        stupid_buf_n--;
+
+        printf("TEST NOTE 50 : stupid_buf_n = %i \n",stupid_buf_n);
+
+        //dropping colors that are not used by image anymore
+        uint8_t *usagebuf = malloc(stupid_buf_n+10);
+        memset(usagebuf,0,stupid_buf_n+10);
+        for (i = 0, pix = im->pix; i < im->w * im->h; i++, pix += 4)
+        {
+             int _tmp = color_find_stupid(stupid_buf,stupid_buf_n,pix);
+             usagebuf[_tmp] = 1;
+        }
+        for (i=0;i<stupid_buf_n;i++)
+        {
+            if (usagebuf[i] == 0)
+                stupid_buf[i]->count = 0;
+        }
+        for (j = 0; j < stupid_buf_n; j++) {
+            if (stupid_buf[j]->count <= 0)
+            {
+                //removing node j
+                        for (int k=j; k< stupid_buf_n; k++)
+                            stupid_buf[k] = stupid_buf[k+1];
+                        stupid_buf_n--;
+                        j=0;
+            }
+        }
+        free (usagebuf);
+
+        printf("TEST NOTE 60 : stupid_buf_n = %i \n",stupid_buf_n);
+
+    }
+
+    //dumping colors
+    FILE *colordump_file = fopen("colors.dump","w");
+    //debug_dump_colors_recursive(colordump_file, root);
+    for (i = 1; i < stupid_buf_n; i++) {
+        /*sprintf_s(buf,256,"%i %i %i\n",heap.buf[i]->r/heap.buf[i]->count,
+                heap.buf[i]->g/heap.buf[i]->count,
+                heap.buf[i]->b/heap.buf[i]->count);*/
+        sprintf_s(buf,256,"%i %i %i\n",stupid_buf[i]->r,
+                         stupid_buf[i]->g,
+                         stupid_buf[i]->b);
+        fwrite(buf,strlen(buf),1,colordump_file);
+    }
+    fclose(colordump_file);
+
+
     //int colors = calculate_unique_colors(&heap);
     //printf("Start colors number: %i \n",colors);
-    while (heap.n > n_colors + 1)
-    //while (colors > n_colors*10)
+    /*while (heap.n > n_colors + 1)
     {
         heap_add(&heap, node_fold(pop_heap(&heap)));
-        //colors = calculate_unique_colors(&heap);
-    }
+    }*/
     //printf("End colors number: %i \n",colors);
 
-    double c;
+    //round colors
+    /*double c;
+    for (i = 1; i < heap.n; i++) {
+        got = heap.buf[i];
+        c = got->count;
+        got->r = got->r / c + .5;
+        got->g = got->g / c + .5;
+        got->b = got->b / c + .5;
+    }*/
+
+    /*double c;
     for (i = 1; i < heap.n; i++) {
         got = heap.buf[i];
         c = got->count;
@@ -355,10 +606,10 @@ int color_quant(image im, int n_colors, int dither)
         got->g = got->g / c + .5;
         got->b = got->b / c + .5;
 
-        /*got->r = round((got->r / c )/8)*8;
-        got->g = round((got->g / c )/8)*8;
-        got->b = round((got->b / c )/8)*8;*/
-    }
+        //got->r = round((got->r / c )/8)*8;
+        //got->g = round((got->g / c )/8)*8;
+        //got->b = round((got->b / c )/8)*8;
+    }*/
 
     if (dither)
     {
@@ -369,9 +620,10 @@ int color_quant(image im, int n_colors, int dither)
         colors_num = 0;
         for (i = 0, pix = im->pix; i < im->w * im->h; i++, pix += 4)
         {
-            color_replace(root, pix);
+            //color_replace(root, pix);
+            color_replace_stupid(stupid_buf,stupid_buf_n,pix);
             //colors calc
-            color = 0x10000 * pix[0] + 0x100 * pix[1] + pix[2];
+            /*color = 0x10000 * pix[0] + 0x100 * pix[1] + pix[2];
             bfound = 0;
             int k=0;
             while ( (0 == bfound) && (k<colors_num) )
@@ -383,17 +635,12 @@ int color_quant(image im, int n_colors, int dither)
             {
                 colors[colors_num] = color;
                 colors_num++;
-            }
+            }*/
         }
-        current_colors = colors_num;
+        current_colors = stupid_buf_n;//colors_num;
     }
 
-    //folding into zero
-    /*while (heap.n > 2)
-    {
-        pop_heap(&heap);
-    }*/
-
+    free(stupid_buf);
     node_free();
     free(heap.buf);
 
