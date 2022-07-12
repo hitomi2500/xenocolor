@@ -400,8 +400,8 @@ int color_quant(image im, int n_colors, int dither)
     printf("TEST NOTE 10 : heap.n = %i \n",heap.n);
 
     //moving to linear array instead of this ugly shit
-    //oct_node* stupid_buf = malloc(sizeof(oct_node)*heap.n);
-    oct_node stupid_buf[3000];
+    oct_node* stupid_buf = malloc(sizeof(oct_node)*heap.n);
+    //oct_node stupid_buf[3000];
     for (i = 1; i < heap.n; i++)
     {
         stupid_buf[i] = heap.buf[i];
