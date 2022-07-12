@@ -68,7 +68,7 @@ void print_usage(char * binaryname)
 
 int main(int argc, char *argv[] )
 {
-    printf("xenocolor v 0.2\n");
+    printf("xenocolor v 0.3\n");
 
     //print_usage(argv[0]);
 
@@ -81,7 +81,7 @@ int main(int argc, char *argv[] )
     char filename_out[1024];
     char filename2[1024];
 
-    strcpy(filename,"in0.tga");
+    strcpy(filename,"in.tga");
     strcpy(filename_out,"out.tga");
 
     //parsing input values
